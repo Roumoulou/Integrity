@@ -6,6 +6,7 @@
   "description": "Vérifie la conformité du modpack client avec la référence approuvée par le serveur.",
   "authors": ["Roumoulou"],
   "license": "LGPL-3.0-only",
+  "icon": "assets/integrity/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["fr.moulou.integrity.IntegrityMod"],
