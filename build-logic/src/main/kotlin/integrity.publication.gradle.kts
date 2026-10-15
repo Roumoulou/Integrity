@@ -45,7 +45,8 @@ val checkPublication = tasks.register("checkPublication") {
     val tokens = PublicationSettings.TOKEN_VARIABLES.joinToString(", ")
     val head = git("rev-parse", "HEAD")
     val taggedCommit = git("rev-parse", "--verify", "--quiet", "$tag^{commit}")
-    val tagOnOrigin = git("ls-remote", "--tags", "origin", "refs/tags/$tag")
+    // Avec un seul motif, ls-remote ne rend que l'objet du tag annoté ; le motif pelé `^{}` donne le commit visé.
+    val tagOnOrigin = git("ls-remote", "--tags", "origin", "refs/tags/$tag", "refs/tags/$tag^{}")
     val workingTree = git("status", "--porcelain")
     doLast {
         val problems = buildList {
