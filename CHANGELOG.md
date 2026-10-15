@@ -2,6 +2,13 @@
 
 Les versions d'Integrity, de la plus récente à la plus ancienne. Chaque JAR porte la version suivie de son Minecraft : `1.0.0+26.3`.
 
+## 1.0.1
+
+Version de publication, sans changement du mod lui-même.
+
+- Le JAR distribué est reproductible : un build du même tag, dans n'importe quel environnement, donne le même fichier octet pour octet.
+- Les correspondances ProGuard de chaque JAR et les sommes SHA-256 sont jointes à la release GitHub, que GitHub Actions vérifie en reconstruisant le tag.
+
 ## 1.0.0
 
 Première version, pour Minecraft `26.1.2`, `26.2` et `26.3`.

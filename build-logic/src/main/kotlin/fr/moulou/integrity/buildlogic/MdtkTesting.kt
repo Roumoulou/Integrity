@@ -37,7 +37,7 @@ fun Project.configureMdtkTesting(minecraftVersion: String, publication: Director
     val prepareReference = tasks.register<PrepareMdtkReference>("prepareMdtkReference") {
         group = "outfitter"
         description = "Prépare la copie client approuvée et la configuration initiale du serveur MDTK local"
-        dependsOn("installServerMdtk", "obfuscateJar")
+        dependsOn("installServerMdtk", "packReleaseJar")
         this.publication.set(clientPublication)
         this.server.set(server)
         reference.set(approved)

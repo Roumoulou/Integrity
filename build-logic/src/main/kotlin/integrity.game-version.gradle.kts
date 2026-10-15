@@ -77,6 +77,9 @@ tasks.named<Jar>("sourcesJar") {
 }
 
 val releaseJar = layout.buildDirectory.file(minecraftVersion.map { "libs/integrity-$baseVersion+$it.jar" })
+// Dans son propre dossier : une copie dans build\libs ferait de tout ce dossier une sortie de la tâche, aux yeux de Gradle.
+val releaseMappingFile = layout.buildDirectory.file(minecraftVersion.map { "mappings/integrity-$baseVersion+$it-mapping.txt" })
+val obfuscatedJar = layout.buildDirectory.file(minecraftVersion.map { "proguard/integrity-$baseVersion+$it-obfuscated.jar" })
 val jdkLibraryJar = rootProject.tasks.findByName("jdkLibraryJar")?.let { rootProject.tasks.named<JdkLibraryJar>(it.name) }
     ?: rootProject.tasks.register<JdkLibraryJar>("jdkLibraryJar") {
         val launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(libs.findVersion("java").get().requiredVersion.toInt()) }
@@ -88,7 +91,7 @@ val obfuscateJar = tasks.register<ProGuardTask>("obfuscateJar") {
     description = "Obfusque le JAR distribué, avec les métadonnées Kotlin et les points d'entrée préservés"
     dependsOn(tasks.jar, jdkLibraryJar)
     injars(tasks.jar.flatMap { it.archiveFile })
-    outjars(releaseJar)
+    outjars(obfuscatedJar)
     configuration(layout.settingsDirectory.file("gradle/proguard.pro").asFile)
     libraryjars((sourceSets["main"].runtimeClasspath + sourceSets["client"].runtimeClasspath).filter { it.isFile })
     libraryjars(jdkLibraryJar.flatMap { it.archive })
@@ -99,7 +102,27 @@ val obfuscateJar = tasks.register<ProGuardTask>("obfuscateJar") {
         "26.3" -> mustRunAfter(":mc-26.1:obfuscateJar", ":mc-26.2:obfuscateJar")
     }
 }
-tasks.assemble { dependsOn(obfuscateJar) }
+// ProGuard date chaque entrée à l'heure du build : le JAR distribué est réempaqueté à dates fixes et en ordre trié, pour qu'un build du même
+// tag donne le même fichier, octet pour octet, ce qu'un relecteur peut vérifier. Les correspondances des noms l'accompagnent dans la release.
+val packReleaseJar = tasks.register<Zip>("packReleaseJar") {
+    group = "build"
+    description = "Réempaquète le JAR obfusqué à dates fixes et en ordre trié : le même tag donne le même fichier"
+    dependsOn(obfuscateJar)
+    from(zipTree(obfuscatedJar))
+    destinationDirectory = layout.buildDirectory.dir("libs")
+    archiveFileName = minecraftVersion.map { "integrity-$baseVersion+$it.jar" }
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+val releaseMapping = tasks.register<Copy>("releaseMapping") {
+    group = "build"
+    description = "Copie les correspondances ProGuard sous le nom du JAR distribué, pour la release"
+    dependsOn(obfuscateJar)
+    from(layout.buildDirectory.file("proguard/mapping.txt"))
+    into(layout.buildDirectory.dir("mappings"))
+    rename { releaseMappingFile.get().asFile.name }
+}
+tasks.assemble { dependsOn(packReleaseJar, releaseMapping) }
 
 val testMC = sourceSets.create("testMC")
 dependencies {
@@ -114,7 +137,7 @@ val testClasses = configurations.named(testMC.runtimeClasspathConfigurationName)
 val testDistribution = tasks.register<Test>("testDistribution") {
     group = "verification"
     description = "Vérifie le JAR obfusqué sur la version de Minecraft du module"
-    dependsOn(obfuscateJar)
+    dependsOn(packReleaseJar)
     testClassesDirs = files(testClasses)
     classpath = files(testClasses, releaseJar, configurations.named(testMC.runtimeClasspathConfigurationName),
         sourceSets["main"].runtimeClasspath.filter { it.isFile }, sourceSets["client"].runtimeClasspath.filter { it.isFile })
@@ -152,7 +175,7 @@ val checkPublication: TaskProvider<Task> = rootProject.tasks.named("checkPublica
 
 publishMods {
     dryRun = !publication.live
-    file = obfuscateJar.flatMap { releaseJar }
+    file = packReleaseJar.flatMap { it.archiveFile }
     version = releaseVersion
     displayName = releaseVersion.map { "Integrity-$it" }
     changelog = providers.fileContents(publication.changelog).asText.orElse("")
@@ -181,6 +204,8 @@ publishMods {
     github {
         accessToken = providers.environmentVariable("GITHUB_TOKEN")
         parent(githubRelease)
+        // Les correspondances ProGuard rejoignent la release : un relecteur retrouve chaque classe obfusquée dans les sources.
+        additionalFiles.from(releaseMapping.map { releaseMappingFile.get() })
     }
 }
 
@@ -188,5 +213,5 @@ publishMods {
 val checkTask = tasks.named("check")
 githubRelease { dependsOn(checkTask) }
 tasks.named("publishGithub") { dependsOn(githubRelease) }
-tasks.withType<PublishModTask>().configureEach { dependsOn(checkPublication, checkTask) }
+tasks.withType<PublishModTask>().configureEach { dependsOn(checkPublication, checkTask, releaseMapping) }
 checkTask { mustRunAfter(checkPublication) }

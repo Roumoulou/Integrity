@@ -1,0 +1,63 @@
+# Vérifie une release : reconstruit son tag dans un environnement neuf et compare, octet pour octet, les JAR obfusqués et les correspondances
+# ProGuard construits ici avec ceux joints à la release. Quand tout est identique, les sommes SHA-256 rejoignent la release (SHA256SUMS).
+# Un relecteur tient ainsi la preuve que les fichiers distribués sortent des sources du tag.
+name: Verify release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Le tag de la release à vérifier, par exemple v1.0.1"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the tag
+        run: ./gradlew assemble --console=plain
+      - name: Download the release assets
+        # La release naît avant que ses JAR y soient joints : on attend les trois, au plus quinze minutes.
+        run: |
+          version="${TAG#v}"
+          for attempt in $(seq 1 30); do
+            rm -rf assets && mkdir -p assets
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "integrity-*" --dir assets || true
+            if [ -f "assets/integrity-$version+26.1.2.jar" ] && [ -f "assets/integrity-$version+26.2.jar" ] && [ -f "assets/integrity-$version+26.3.jar" ]; then
+              break
+            fi
+            echo "assets not complete yet, attempt $attempt"; sleep 30
+          done
+          ls -l assets
+      - name: Compare the built files with the release assets
+        run: |
+          status=0
+          for built in mc-*/build/libs/integrity-*+*.jar mc-*/build/mappings/integrity-*-mapping.txt; do
+            name=$(basename "$built")
+            case "$name" in *-dev.jar|*-sources.jar) continue ;; esac
+            if [ ! -f "assets/$name" ]; then echo "MISSING in release: $name"; status=1
+            elif cmp -s "$built" "assets/$name"; then echo "identical: $name"
+            else echo "DIFFERENT: $name"; status=1
+            fi
+          done
+          (cd assets && sha256sum integrity-*) > SHA256SUMS
+          { echo '```'; cat SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: Attach the checksums to the release
+        run: gh release upload "$TAG" SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber

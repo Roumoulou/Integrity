@@ -113,8 +113,14 @@ demande sa cible dans `outfitter.reference_instance_dir`. Ces copies servent à 
 ## 7. Publier une version
 
 mod-publish-plugin fait tout d'une commande : la racine (`integrity.publication`) crée la release GitHub de la version sur le tag `v<version>`, et chaque
-module de version y joint son JAR obfusqué puis l'envoie sur Modrinth et CurseForge, une version par Minecraft, Fabric API et Fabric Language Kotlin
-déclarées requises. Le JAR de sources ne part pas : le tag donne les sources, et le JAR distribué reste obfusqué.
+module de version y joint son JAR obfusqué et ses correspondances ProGuard, puis envoie le JAR sur Modrinth et CurseForge, une version par Minecraft,
+Fabric API et Fabric Language Kotlin déclarées requises. Le JAR de sources ne part pas : le tag donne les sources, et le JAR distribué reste obfusqué.
+
+Le JAR distribué sort de `packReleaseJar`, qui réempaquète la sortie de ProGuard à dates fixes et en ordre trié : ProGuard date chaque entrée à l'heure du
+build, et sans ce réempaquetage deux builds du même tag donnent deux fichiers différents. La reproductibilité est ce que Modrinth exige d'un JAR
+obfusqué ; le workflow `Verify release` la contrôle à chaque release publiée, en reconstruisant le tag et en comparant avec les fichiers joints, puis
+attache `SHA256SUMS`. Le workflow `Build` construit et teste chaque poussée sur `master`. Ni l'un ni l'autre ne publie : les jetons de publication restent
+sur le poste.
 
 | Clé de `gradle.properties` | Sens |
 |---|---|

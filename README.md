@@ -137,10 +137,30 @@ Storify et Outfitter viennent du dépôt Repsy déclaré par le build.
 | `mc-26.3` | `26.3` | `mc-26.3\build\libs\integrity-1.0.0+26.3.jar` |
 
 `common` porte la logique partagée et compile contre `26.3` ; chaque module de version vérifie que ce code ne nomme que des symboles de son jeu, embarque
-Storify, tomlkt et json5, et produit son JAR obfusqué par ProGuard. Le `-dev.jar` sert au développement ; `<module>\build\proguard\mapping.txt` donne les
-correspondances des noms. Le build exécute les tests du cœur, quatre tests du JAR obfusqué et deux GameTests par version. Les environnements de
-développement, les essais avec le modpack MDTK et la connexion directe d'un client de test sont décrits dans
+Storify, tomlkt et json5, et produit deux JAR du même code : `integrity-<version>+<minecraft>-dev.jar`, tel que compilé, et
+`integrity-<version>+<minecraft>.jar`, le JAR distribué, passé par ProGuard. Le build exécute les tests du cœur, quatre tests du JAR obfusqué et deux
+GameTests par version. Les environnements de développement, les essais avec le modpack MDTK et la connexion directe d'un client de test sont décrits dans
 [docs/technical-docs/environnement-de-developpement.md](docs/technical-docs/environnement-de-developpement.md).
+
+### L'obfuscation, et comment vérifier un JAR
+
+Le JAR distribué est obfusqué parce que le code client est le contrôle d'accès lui-même : un joueur qui peut retoucher ce JAR à la volée envoie un
+rapport forgé. ProGuard, réglé par `gradle/proguard.pro`, ne fait que renommer les classes et membres internes : aucune réduction, aucune optimisation,
+aucun chiffrement de chaînes, aucune réécriture du flot. Les points d'entrée, les modèles sérialisés, les codecs et la façade gardent leur nom.
+
+Le JAR distribué est reproductible : construire le tag d'une version, dans n'importe quel environnement, donne le même fichier octet pour octet.
+Pour le vérifier :
+
+```bash
+git clone https://github.com/Roumoulou/Integrity.git && cd Integrity && git switch --detach v1.0.1
+./gradlew assemble --console=plain
+sha256sum mc-*/build/libs/integrity-*.jar
+```
+
+Les sommes se comparent au fichier `SHA256SUMS` de la release, et chaque release porte le fichier de correspondances ProGuard de chaque JAR
+(`integrity-<version>+<minecraft>-mapping.txt`), qui relie chaque nom obfusqué à son nom dans les sources. Le workflow `Verify release` refait cette
+vérification à chaque release publiée, dans un environnement neuf, et n'attache `SHA256SUMS` que si tout est identique ; le workflow `Build` construit
+et teste chaque poussée sur `master`.
 
 ## Le dépôt
 

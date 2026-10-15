@@ -45,7 +45,7 @@ dependencies {
 
 // Un déploiement utilise le même JAR obfusqué que la distribution.
 tasks.withType<DeployTask>().configureEach {
-    dependsOn("obfuscateJar")
+    dependsOn("packReleaseJar")
     jar.set(layout.buildDirectory.file("libs/integrity-${providers.gradleProperty("mod_version").get()}+${mc263.versions.minecraft.get()}.jar"))
 }
 

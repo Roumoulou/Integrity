@@ -1,0 +1,36 @@
+# Construit et teste à chaque poussée sur master et à chaque pull request, dans un environnement neuf, et publie les JAR produits en artefact
+# avec leurs sommes SHA-256 : ce que donne le dépôt tel quel, sans la machine de l'auteur.
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and test
+        run: ./gradlew build --console=plain
+      - name: Checksums
+        run: |
+          sha256sum mc-*/build/libs/integrity-*.jar mc-*/build/mappings/integrity-*-mapping.txt | tee checksums.txt
+          { echo '```'; cat checksums.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integrity-jars
+          path: |
+            mc-*/build/libs/integrity-*.jar
+            mc-*/build/mappings/integrity-*-mapping.txt
+            checksums.txt
