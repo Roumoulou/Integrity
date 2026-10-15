@@ -3,6 +3,8 @@ import fr.moulou.integrity.buildlogic.JdkLibraryJar
 import fr.moulou.integrity.buildlogic.PublicationSettings
 import me.modmuss50.mpp.PublishModTask
 import proguard.gradle.ProGuardTask
+import java.util.jar.Manifest
+import java.util.zip.ZipFile
 
 plugins {
     id("integrity.loom-module")
@@ -102,25 +104,50 @@ val obfuscateJar = tasks.register<ProGuardTask>("obfuscateJar") {
         "26.3" -> mustRunAfter(":mc-26.1:obfuscateJar", ":mc-26.2:obfuscateJar")
     }
 }
+// Loom liste les entrées réservées au client dans l'ordre du système de fichiers, qui change d'un système à l'autre : le manifeste du JAR
+// distribué est réécrit avec cette liste triée, par l'écriture canonique de java.util.jar.Manifest.
+val normalizedManifest = layout.buildDirectory.file(minecraftVersion.map { "proguard/integrity-$baseVersion+$it-MANIFEST.MF" })
+val normalizeManifest = tasks.register("normalizeManifest") {
+    description = "Réécrit le manifeste du JAR obfusqué avec ses listes triées, les mêmes sur tout système"
+    dependsOn(obfuscateJar)
+    inputs.file(obfuscatedJar)
+    outputs.file(normalizedManifest)
+    doLast {
+        val manifest = ZipFile(obfuscatedJar.get().asFile).use { zip ->
+            zip.getInputStream(zip.getEntry("META-INF/MANIFEST.MF")).use { Manifest(it) }
+        }
+        val attributes = manifest.mainAttributes
+        attributes.getValue("Fabric-Loom-Client-Only-Entries")?.let { entries ->
+            attributes.putValue("Fabric-Loom-Client-Only-Entries", entries.split(';').sorted().joinToString(";"))
+        }
+        normalizedManifest.get().asFile.outputStream().use { manifest.write(it) }
+    }
+}
 // ProGuard date chaque entrée à l'heure du build : le JAR distribué est réempaqueté à dates fixes et en ordre trié, pour qu'un build du même
 // tag donne le même fichier, octet pour octet, ce qu'un relecteur peut vérifier. Les correspondances des noms l'accompagnent dans la release.
-val packReleaseJar = tasks.register<Zip>("packReleaseJar") {
+val packReleaseJar = tasks.register<Jar>("packReleaseJar") {
     group = "build"
     description = "Réempaquète le JAR obfusqué à dates fixes et en ordre trié : le même tag donne le même fichier"
-    dependsOn(obfuscateJar)
-    from(zipTree(obfuscatedJar))
+    dependsOn(obfuscateJar, normalizeManifest)
+    // Le manifeste normalisé est écrit en tête de l'archive par la tâche Jar ; les autres entrées suivent, triées.
+    manifest { from(normalizedManifest) }
+    from(zipTree(obfuscatedJar)) { exclude("META-INF/MANIFEST.MF") }
     destinationDirectory = layout.buildDirectory.dir("libs")
     archiveFileName = minecraftVersion.map { "integrity-$baseVersion+$it.jar" }
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
 }
-val releaseMapping = tasks.register<Copy>("releaseMapping") {
+val releaseMapping = tasks.register("releaseMapping") {
     group = "build"
-    description = "Copie les correspondances ProGuard sous le nom du JAR distribué, pour la release"
+    description = "Copie les correspondances ProGuard sous le nom du JAR distribué, en LF, pour la release"
     dependsOn(obfuscateJar)
-    from(layout.buildDirectory.file("proguard/mapping.txt"))
-    into(layout.buildDirectory.dir("mappings"))
-    rename { releaseMappingFile.get().asFile.name }
+    val source = layout.buildDirectory.file("proguard/mapping.txt")
+    inputs.file(source)
+    outputs.file(releaseMappingFile)
+    doLast {
+        // ProGuard écrit les fins de ligne de la plateforme : la release les porte en LF, les mêmes sur tout système.
+        releaseMappingFile.get().asFile.writeText(source.get().asFile.readText().replace("\r\n", "\n"))
+    }
 }
 tasks.assemble { dependsOn(packReleaseJar, releaseMapping) }
 
