@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "integrity",
+  "version": "${version}",
+  "name": "Integrity",
+  "description": "Vérifie la conformité du modpack client avec la référence approuvée par le serveur.",
+  "authors": ["Roumoulou"],
+  "license": "LGPL-3.0-only",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["fr.moulou.integrity.IntegrityMod"],
+    "client": ["fr.moulou.integrity.client.IntegrityClient"]
+  },
+  "depends": {
+    "java": ">=${java_version}",
+    "minecraft": "${minecraft_version}",
+    "fabricloader": ">=${fabric_loader_version}",
+    "fabric-api": "*",
+    "fabric-language-kotlin": ">=${fabric_language_kotlin_version}"
+  }
+}

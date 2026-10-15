@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "integrity-gametest",
+  "version": "1.0.0",
+  "name": "Integrity, tests du serveur",
+  "environment": "server",
+  "license": "LGPL-3.0-only",
+  "entrypoints": { "fabric-gametest": ["fr.moulou.integrity.gametest.IntegrityGameTests"] },
+  "depends": { "integrity": "*", "fabric-gametest-api-v1": "*" }
+}
