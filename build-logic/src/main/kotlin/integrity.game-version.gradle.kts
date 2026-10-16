@@ -17,6 +17,8 @@ val baseVersion = version.toString()
 val modId = providers.gradleProperty("mod_id").get()
 val releaseLine = name.removePrefix("mc-")
 require(name.startsWith("mc-") && Regex("\\d+\\.\\d+").matches(releaseLine)) { "Version module must be named mc-<release line>" }
+// Le catalogue de la lignée, mc263 pour mc-26.3 : il porte aussi le SHA-1 du client.jar que le serveur attend d'un client.
+val lineCatalog = the<VersionCatalogsExtension>().named("mc" + releaseLine.replace(".", ""))
 val minecraftVersion = objects.property<String>()
 
 configurations.named("minecraft") {
@@ -50,10 +52,18 @@ loom {
         }
     }
     // Un essai sans clic : -Pintegrity.dev.quickPlay=127.0.0.1:25563 fait rejoindre ce serveur au client dès son lancement.
+    // Deux essais de refus sans toucher au code : -Pintegrity.dev.addMods=<jar> fait charger un mod hors de mods par Loader, et
+    // -Pintegrity.dev.declaredVersion=<version> fait déclarer cette version d'Integrity au client de développement.
     val quickPlay = providers.gradleProperty("integrity.dev.quickPlay")
+    val addMods = providers.gradleProperty("integrity.dev.addMods")
+    val declaredVersion = providers.gradleProperty("integrity.dev.declaredVersion")
     runs.configureEach {
         generateRunConfig = true; appendProjectPathToDisplayName = true
-        if (name.startsWith("client") && quickPlay.isPresent) programArguments.addAll("--quickPlayMultiplayer", quickPlay.get())
+        if (name.startsWith("client")) {
+            if (quickPlay.isPresent) programArguments.addAll("--quickPlayMultiplayer", quickPlay.get())
+            if (addMods.isPresent) vmArg("-Dfabric.addMods=${addMods.get()}")
+            if (declaredVersion.isPresent) vmArg("-Dintegrity.dev.declaredVersion=${declaredVersion.get()}")
+        }
     }
 }
 
@@ -61,6 +71,7 @@ tasks.processResources {
     val replacements: Map<String, Any> = mapOf(
         "version" to minecraftVersion.map { "$baseVersion+$it" },
         "minecraft_version" to minecraftVersion,
+        "minecraft_client_sha1" to lineCatalog.findVersion("client-jar-sha1").get().requiredVersion,
         "java_version" to libs.findVersion("java").get().requiredVersion,
         "fabric_loader_version" to mc.findVersion("fabric-loader").get().requiredVersion,
         "fabric_language_kotlin_version" to mc.findVersion("fabric-language-kotlin").get().requiredVersion,
@@ -68,7 +79,7 @@ tasks.processResources {
     from(layout.settingsDirectory.dir("common/src/main/resources"))
     filteringCharset = "UTF-8"
     inputs.properties(replacements)
-    filesMatching(listOf("fabric.mod.json", "defaults/modpack.json")) { expand(replacements.mapValues { (_, value) -> if (value is Provider<*>) value.get() else value }) }
+    filesMatching(listOf("fabric.mod.json", "defaults/modpack.json", "integrity-game.properties")) { expand(replacements.mapValues { (_, value) -> if (value is Provider<*>) value.get() else value }) }
 }
 val commonClasses = configurations.runtimeClasspath.map { classpath ->
     classpath.incoming.artifactView { componentFilter { it is ProjectComponentIdentifier && it.projectPath == ":common" } }.files
@@ -173,6 +184,8 @@ val testDistribution = tasks.register<Test>("testDistribution") {
     mustRunAfter(":common:test")
     systemProperty("integrity.expectedMinecraft", minecraftVersion.get())
     systemProperty("integrity.distributionJar", releaseJar.get().asFile.absolutePath)
+    // Les tests nomment le code renommé par ses noms d'origine, à travers les correspondances de ProGuard.
+    systemProperty("integrity.distributionMapping", layout.buildDirectory.file("proguard/mapping.txt").get().asFile.absolutePath)
     workingDir = layout.buildDirectory.dir("run/testDistribution").get().asFile
     doFirst { workingDir.mkdirs() }
     testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }

@@ -11,9 +11,12 @@ import net.minecraft.commands.Commands.argument
 import net.minecraft.commands.Commands.literal
 import net.minecraft.network.chat.Component
 import net.minecraft.server.permissions.Permissions
+import java.util.UUID
 import java.util.concurrent.CompletionException
 
 object IntegrityCommands {
+    private const val HISTORY_LINES = 10
+
     fun register() {
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
             dispatcher.register(literal("integrity")
@@ -22,6 +25,9 @@ object IntegrityCommands {
                 .then(literal("status").executes { context -> success(context.source, ServerStates.get(context.source.server).status()) })
                 .then(literal("reload").executes { context -> operation(context.source) { state -> state.reload(); "Règles et référence rechargées. Les joueurs sont revérifiés." } })
                 .then(literal("check").executes { context -> operation(context.source) { state -> "Vérification demandée pour ${state.recheckAll()} joueur(s)." } })
+                .then(literal("history").then(argument("player", StringArgumentType.word()).executes { context ->
+                    operation(context.source) { state -> history(state, StringArgumentType.getString(context, "player")) }
+                }))
                 .then(literal("reference")
                     .then(literal("list").executes { context -> operation(context.source) { state -> state.referenceIds().joinToString(", ").ifEmpty { "Aucune référence générée." } } })
                     .then(literal("generate").then(argument("id", StringArgumentType.word()).executes { context ->
@@ -44,6 +50,18 @@ object IntegrityCommands {
                 ),
             )
         }
+    }
+
+    /** Les derniers contrôles d'un joueur, désigné par son nom s'il est connecté, sinon par son UUID. */
+    private fun history(state: ServerState, player: String): String {
+        val id = state.server.playerList.getPlayerByName(player)?.uuid ?: runCatching { UUID.fromString(player) }.getOrNull()
+            ?: throw IllegalArgumentException("Unknown player $player; give the name of a connected player or a UUID")
+        val history = state.history(id) ?: return "Aucun contrôle noté pour $player ($id)."
+        val lines = history.entries.asReversed().take(HISTORY_LINES).map { entry ->
+            val versions = listOfNotNull(entry.integrityVersion?.let { "Integrity $it" }, entry.loaderVersion?.let { "Loader $it" }, entry.minecraftVersion?.let { "Minecraft $it" })
+            "${entry.at} ${if (entry.accepted) "accepté" else "refusé"} : ${entry.summary}" + (versions + "${entry.channels.size} canaux").joinToString(", ", " (", ")")
+        }
+        return "${history.name ?: player} ($id) : ${history.entries.size} contrôle(s) noté(s), du plus récent au plus ancien.\n" + lines.joinToString("\n")
     }
 
     private fun generate(source: CommandSourceStack, id: String): Int {

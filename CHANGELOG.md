@@ -2,6 +2,23 @@
 
 Les versions d'Integrity, de la plus récente à la plus ancienne. Chaque JAR porte la version suivie de son Minecraft : `1.0.0+26.3`.
 
+## 1.1.0
+
+Durcissement du client contre le bricoleur qui sait patcher un JAR. Le protocole passe en `2` : un client `1.0.x` est refusé avec un message qui nomme la
+version à installer.
+
+- Le rapport porte un relevé d'exécution : les mods que Fabric Loader a chargés et leurs origines, les resourcepacks sélectionnés et leur dossier, les
+  arguments de la JVM et les propriétés `fabric.*`, les jars du jeu et leur SHA-1, les versions d'Integrity, du protocole et de Loader, un instantané des
+  mods pris avant les entrypoints des autres mods, les mixins et les classes des mods voisins qui visent Integrity, et une empreinte du JAR Integrity liée
+  au contrôle.
+- Le serveur refuse un mod chargé hors de `mods` (`fabric.addMods`), un dossier de resourcepacks déplacé, un agent Java, un jar du jeu qui n'est pas celui
+  de Mojang, un mod voisin dont un mixin ou une classe vise Integrity, un JAR Integrity qui n'est pas le sien, et toute autre version d'Integrity que la
+  sienne. Réglages : `allowDevelopmentClients`, `rejectedLaunchOptions`, `recheckJitterSeconds`.
+- Les contrôles périodiques tirent leur échéance au sort autour de l'intervalle, et un contrôle suit chaque réapparition et chaque changement de dimension.
+- `integrity history <joueur>` : les derniers contrôles d'un joueur, avec les versions vues et les canaux qu'il annonçait, sous `config/integrity/history`.
+- Le JAR distribué ne garde en clair que les points d'entrée, le pont de version et les classes de données ; le reste est renommé, et le JAR reste
+  reproductible.
+
 ## 1.0.1
 
 Version de publication, sans changement du mod lui-même.

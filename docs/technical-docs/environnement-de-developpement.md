@@ -43,7 +43,9 @@ outfitter.username=Roumoulou
 `prepareDevTests` prépare le couple vanilla d'un module et fige sa première copie client approuvée sous
 `run\server\integrity\reference-client\Integrity-DEV-<minecraft>\.minecraft` ; `prepareMdtkDevTests` fait de même pour le couple MDTK, sous
 `run\server-modded\integrity\reference-client\MDTK-DEV-<minecraft>\.minecraft`. Une copie approuvée présente n'est jamais remplacée. La configuration
-stricte initiale et le port du serveur sont posés ; la génération et l'activation du manifeste restent des commandes de la console serveur.
+stricte initiale et le port du serveur sont posés ; la génération et l'activation du manifeste restent des commandes de la console serveur. Cette
+configuration porte `allowDevelopmentClients: true`, parce qu'un client Loom charge Integrity, Fabric API et FLK depuis le classpath et des jars du jeu
+qui ne sont pas ceux de Mojang ; une configuration posée avant ce réglage reçoit la clé à la main, la préparation ne réécrit jamais un fichier présent.
 
 ```powershell
 .\gradlew.bat :mc-26.3:prepareDevTests --console=plain
@@ -58,7 +60,8 @@ physiques du client Loom, donc pas les dépendances fournies au classpath : elle
 
 `testMdtkDev` charge le vrai JAR obfusqué et vérifie, sur les dossiers Loom, la conformité du client MDTK préparé puis les refus (mod ajouté, mod retiré,
 resourcepack ajouté ou modifié, shaderpack ajouté, exception de catégorie) dans des copies temporaires. Il ne lance aucun client et n'exécute pas le
-code des mods ajoutés. Ses rapports sont sous `<module>\build\reports\tests\testMdtkDev` ; il n'est jamais considéré à jour.
+code des mods ajoutés. Comme les tests de distribution, il nomme le JAR obfusqué par ses noms d'origine, traduits par le fichier de correspondances de
+ProGuard que le build lui donne (`integrity.distributionMapping`). Ses rapports sont sous `<module>\build\reports\tests\testMdtkDev` ; il n'est jamais considéré à jour.
 
 ```powershell
 .\gradlew.bat :mc-26.3:testMdtkDev :mc-26.2:testMdtkDev --console=plain
@@ -78,6 +81,15 @@ remplacé.
 
 Le verdict se lit dans la console du serveur : `verified against reference <id>` puis `joined the game`, ou `rejected: ... violations=[...]` suivi de
 `lost connection: Integrity : installation non conforme.` Le client, lui, reste au menu après un refus ; son processus se ferme à la main.
+
+Deux propriétés jouent un refus du relevé d'exécution sans toucher au code ni aux dossiers : `-Pintegrity.dev.addMods=<jar>` fait charger ce mod par
+Loader hors de `mods` (la propriété système `fabric.addMods`, que le serveur refuse toujours), et `-Pintegrity.dev.declaredVersion=<version>` fait
+déclarer cette version d'Integrity au client, pour le refus d'un client trop ancien. La seconde n'a d'effet que dans un environnement de développement.
+
+```powershell
+.\gradlew.bat :mc-26.3:runClient '-Pintegrity.dev.quickPlay=127.0.0.1:25563' '-Pintegrity.dev.addMods=S:\16\_V\Integrity\02-data\00-test\26.3\mods\xray-orevision-3.0.1.jar' --console=plain
+.\gradlew.bat :mc-26.3:runClient '-Pintegrity.dev.quickPlay=127.0.0.1:25563' '-Pintegrity.dev.declaredVersion=1.0.1+26.3' --console=plain
+```
 
 Pour piloter la console du serveur depuis un script, lancer `runServer` avec son entrée standard branchée sur un fichier suivi en continu, puis y ajouter
 les commandes au fil de l'essai, `stop` compris. Depuis Git Bash :
@@ -150,4 +162,4 @@ module en échec (`:mc-26.3:publishMods`) ; une release GitHub déjà créée s'
 
 ---
 
-*Dernière vérification : 2026-10-14.*
+*Dernière vérification : 2026-10-16.*

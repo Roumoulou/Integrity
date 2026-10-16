@@ -10,7 +10,8 @@
   "environment": "*",
   "entrypoints": {
     "main": ["fr.moulou.integrity.IntegrityMod"],
-    "client": ["fr.moulou.integrity.client.IntegrityClient"]
+    "client": ["fr.moulou.integrity.client.IntegrityClient"],
+    "preLaunch": ["fr.moulou.integrity.IntegrityPreLaunch"]
   },
   "depends": {
     "java": ">=${java_version}",

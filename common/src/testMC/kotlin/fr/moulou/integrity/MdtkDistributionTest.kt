@@ -1,6 +1,5 @@
 package fr.moulou.integrity
 
-import fr.moulou.integrity.api.IntegrityService
 import fr.moulou.integrity.config.CategoryPolicy
 import fr.moulou.integrity.config.DeviationKind
 import fr.moulou.integrity.config.IntegrityStores
@@ -34,7 +33,7 @@ class MdtkDistributionTest {
 
     @Test
     fun `le client MDTK prepare est conforme au vrai jar distribue`() {
-        assertEquals(Path.of(System.getProperty("integrity.distributionJar")).toRealPath(), Path.of(IntegrityService::class.java.protectionDomain.codeSource.location.toURI()).toRealPath())
+        assertEquals(Path.of(System.getProperty("integrity.distributionJar")).toRealPath(), Path.of(Obfuscated.type("fr.moulou.integrity.api.IntegrityService").protectionDomain.codeSource.location.toURI()).toRealPath())
         val development = System.getProperty("integrity.mdtk.development", "false").toBoolean()
         if (development) {
             // Loom charge Integrity depuis les classes compilées ; un second JAR dans mods provoquerait un doublon.
@@ -106,18 +105,18 @@ class MdtkDistributionTest {
         val report = scan(sandbox)
         assertDeviation(compare(reference, report), Category.SHADERPACKS, DeviationKind.ADDED)
         val exception = ServerConfig(policies = Category.entries.associateWith { CategoryPolicy(ignore = it == Category.SHADERPACKS) })
-        assertTrue(IntegrityService.compare(reference, report, exception, player).accepted)
+        assertTrue(Obfuscated.compare(reference, report.withRuntime(), exception, player).accepted)
         assertFalse(compare(reference, report.copy(pack = report.pack.copy(version = "0.0.0"))).accepted)
         println("MDTK : mod ajouté, mod retiré, resourcepack ajouté ou modifié, shaderpack ajouté et exception vérifiés dans une copie temporaire.")
     }
 
-    private fun scan(path: Path): InventoryReport = IntegrityService.scan(path, IntegrityStores.pack(path, createIfMissing = false))
+    private fun scan(path: Path): InventoryReport = Obfuscated.scan(path, IntegrityStores.pack(path, createIfMissing = false))
 
     private fun fixtures(category: String, extension: String): List<Path> = Files.list(fixtures.resolve(category)).use { files ->
         files.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(extension) }.sorted().toList().also { require(it.isNotEmpty()) { "No $category test fixtures" } }
     }
 
-    private fun compare(reference: InventoryReport, report: InventoryReport): ValidationResult = IntegrityService.compare(reference, report, ServerConfig(), player)
+    private fun compare(reference: InventoryReport, report: InventoryReport): ValidationResult = Obfuscated.compare(reference, report.withRuntime(), ServerConfig(), player)
 
     private fun assertDeviation(result: ValidationResult, category: Category, kind: DeviationKind) {
         assertFalse(result.accepted)

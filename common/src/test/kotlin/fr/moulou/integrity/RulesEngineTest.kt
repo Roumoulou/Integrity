@@ -92,5 +92,5 @@ class RulesEngineTest {
         assertFalse(compare(reference.copy(entries = listOf(mod, mod.copy(path = "mods/second.jar")))).accepted)
     }
 
-    private fun compare(client: InventoryReport, config: ServerConfig = ServerConfig(), player: UUID = playerA) = IntegrityService.compare(reference, client, config, player)
+    private fun compare(client: InventoryReport, config: ServerConfig = ServerConfig(), player: UUID = playerA) = IntegrityService.compare(reference, client.withRuntime(), config, player, TestRuntime.expectations)
 }

@@ -52,9 +52,11 @@ abstract class PrepareMdtkReference : DefaultTask() {
             val instance = approved.parentFile
             val relative = root.toPath().relativize(instance.toPath()).toString().replace('\\', '/')
             val policy = mapOf("ignore" to false, "allowAdded" to false, "allowMissing" to false, "allowModified" to false)
+            // Ces copies tournent avec le JAR distribué dans un launcher : les clients de développement y sont refusés, comme en production.
             config.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(mapOf(
                 "referenceInstance" to relative, "activeReference" to "", "requireSameMinecraft" to true, "requireSameModpack" to true,
-                "enforceSingleplayer" to false, "timeoutSeconds" to 120, "recheckIntervalSeconds" to 300, "maxElements" to 10_000, "maxScanBytes" to 68_719_476_736L,
+                "enforceSingleplayer" to false, "allowDevelopmentClients" to false, "timeoutSeconds" to 120, "recheckIntervalSeconds" to 300, "recheckJitterSeconds" to 60,
+                "maxElements" to 10_000, "maxScanBytes" to 68_719_476_736L, "rejectedLaunchOptions" to ServerDefaults.REJECTED_LAUNCH_OPTIONS,
                 "policies" to mapOf("mods" to policy, "resourcepacks" to policy, "shaderpacks" to policy), "rules" to emptyList<String>(),
             ))) + "\n", Charsets.UTF_8)
         }

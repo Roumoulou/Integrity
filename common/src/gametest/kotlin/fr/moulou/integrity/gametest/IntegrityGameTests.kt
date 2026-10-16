@@ -3,11 +3,20 @@ package fr.moulou.integrity.gametest
 import com.mojang.authlib.GameProfile
 import fr.moulou.integrity.api.IntegrityService
 import fr.moulou.integrity.config.IntegrityStores
+import fr.moulou.integrity.config.ServerConfig
+import fr.moulou.integrity.model.Category
 import fr.moulou.integrity.model.ControlChallenge
+import fr.moulou.integrity.model.GameJar
+import fr.moulou.integrity.model.InventoryReport
+import fr.moulou.integrity.model.LoadedMod
+import fr.moulou.integrity.model.OriginKind
 import fr.moulou.integrity.model.PackIdentity
+import fr.moulou.integrity.model.PreLaunchSnapshot
+import fr.moulou.integrity.model.RuntimeReport
 import fr.moulou.integrity.network.ChunkPayload
 import fr.moulou.integrity.protocol.ControlWire
 import fr.moulou.integrity.protocol.SecureExchange
+import fr.moulou.integrity.rules.ServerExpectations
 import fr.moulou.integrity.server.ServerStates
 import io.netty.channel.ChannelFutureListener
 import net.fabricmc.fabric.api.gametest.v1.GameTest
@@ -24,6 +33,7 @@ import net.minecraft.server.network.CommonListenerCookie
 import net.minecraft.server.network.ServerConfigurationPacketListenerImpl
 import java.net.InetSocketAddress
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 
 /** Éprouve le chargement Fabric et le contrôle asynchrone sur un vrai serveur, avec une connexion de test en mémoire. */
@@ -68,12 +78,16 @@ class IntegrityGameTests {
         }.thenExecute {
             generated.join()
             helper.assertTrue(state.reference == null, "Générer ne doit pas activer une référence")
+            // Le serveur de test tourne depuis des dossiers de classes : sans JAR à authentifier, il tolère les clients de développement.
+            Files.writeString(state.configPath, IntegrityStores.json.encodeToString(ServerConfig(allowDevelopmentClients = true)))
+            state.reload()
+            helper.assertTrue(state.config.allowDevelopmentClients, "Le rechargement doit tolérer les clients de développement")
             state.activate("gametest")
             helper.assertTrue(state.config.activeReference == "gametest", "L'activation doit être persistée")
             state.begin(first, { firstChallenge = it.challenge }, { accepted = true })
             helper.assertTrue(!accepted, "La connexion doit attendre sa réponse")
             val challenge = requireNotNull(firstChallenge)
-            val report = IntegrityService.scan(game, identity)
+            val report = clientReport(game, identity)
             ControlWire.split(challenge.id, SecureExchange.seal(challenge, report)).forEach { state.receive(first, it) }
         }.thenWaitUntil {
             helper.assertTrue(accepted, "Le client conforme doit être accepté après comparaison")
@@ -86,13 +100,32 @@ class IntegrityGameTests {
             state.begin(second, { secondChallenge = it.challenge }, { wronglyAccepted = true })
             val challenge = requireNotNull(secondChallenge)
             helper.assertTrue(challenge.id != firstChallenge!!.id, "Le même UUID reconnecté doit recevoir un nouveau contrôle")
-            ControlWire.split(challenge.id, SecureExchange.seal(challenge, IntegrityService.scan(game, identity))).forEach { state.receive(second, it) }
+            ControlWire.split(challenge.id, SecureExchange.seal(challenge, clientReport(game, identity))).forEach { state.receive(second, it) }
         }.thenWaitUntil {
             helper.assertTrue(secondConnection.rejected, "La reconnexion avec un resourcepack modifié doit être refusée")
         }.thenExecute {
             helper.assertTrue(!wronglyAccepted, "Un refus ne doit pas terminer la tâche de connexion")
             state.disconnected(second)
         }.thenSucceed()
+    }
+
+    /** Le rapport d'un client de production conforme : l'inventaire du dossier, et un relevé d'exécution qui satisfait aux attentes du serveur. */
+    private fun clientReport(game: Path, identity: PackIdentity): InventoryReport {
+        val expectations = ServerExpectations.current
+        val inventory = IntegrityService.scan(game, identity)
+        val mods = listOf(LoadedMod("minecraft", identity.minecraftVersion, OriginKind.PATH, listOf("versions/${identity.minecraftVersion}.jar"))) +
+            inventory.entries.filter { it.category == Category.MODS && it.modId != null }.map { LoadedMod(it.modId!!, it.modVersion!!, OriginKind.PATH, listOf(it.path)) }
+        return inventory.copy(runtime = RuntimeReport(
+            integrityVersion = requireNotNull(expectations.integrityVersion) { "integrity-game.properties is incomplete: $expectations" },
+            protocolVersion = ControlWire.VERSION,
+            loaderVersion = "0.19.5",
+            minecraftVersion = identity.minecraftVersion,
+            developmentEnvironment = false,
+            gameJars = listOf(GameJar("versions/${identity.minecraftVersion}.jar", requireNotNull(expectations.clientSha1) { "integrity-game.properties is incomplete: $expectations" }, 1)),
+            mods = mods,
+            resourcePackDirectory = "resourcepacks",
+            preLaunch = PreLaunchSnapshot(mods),
+        ))
     }
 
     /** Capture le refus sans ouvrir de port ni lancer un client graphique. */

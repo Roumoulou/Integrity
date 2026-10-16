@@ -6,10 +6,12 @@ import fr.moulou.integrity.api.IntegrityService
 import fr.moulou.integrity.config.IntegrityStores
 import fr.moulou.integrity.config.ServerConfig
 import fr.moulou.integrity.inventory.FileHashCache
+import fr.moulou.integrity.inventory.RuntimeInspector
 import fr.moulou.integrity.model.ControlChallenge
 import fr.moulou.integrity.model.InventoryReport
 import fr.moulou.integrity.model.PackIdentity
 import fr.moulou.integrity.model.ReferenceManifest
+import fr.moulou.integrity.model.SelectedPack
 import fr.moulou.integrity.network.ChallengePayload
 import fr.moulou.integrity.network.ChunkPayload
 import fr.moulou.integrity.protocol.ControlWire
@@ -30,11 +32,14 @@ import net.minecraft.SharedConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.toasts.SystemToast
 import net.minecraft.network.chat.Component
+import net.minecraft.server.packs.repository.PackSource
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.function.Supplier
 
 /** Calcule l'inventaire hors du fil du jeu et répond uniquement sur la connexion qui a demandé ce contrôle. */
 class IntegrityClient : ClientModInitializer {
@@ -72,6 +77,9 @@ class IntegrityClient : ClientModInitializer {
 
     private fun handle(owner: Any, challenge: ControlChallenge, sender: PacketSender, connected: () -> Boolean) {
         val client = Minecraft.getInstance()
+        // Les packs sélectionnés et leur dossier se lisent sur le fil du client ; le reste du relevé d'exécution se prend sur le worker, avec l'inventaire.
+        val selectedPacks = runCatching { selectedPacks(client) }.getOrElse { IntegrityMod.LOGGER.warn("Cannot list the selected resource packs", it); emptyList() }
+        val packDirectory = runCatching { client.resourcePackDirectory }.getOrNull()
         // L'écran de connexion de Minecraft traite aussi les déconnexions et l'annulation : le remplacer figerait l'affichage après un refus.
         val future = FutureTask<Unit> {
             try {
@@ -81,10 +89,11 @@ class IntegrityClient : ClientModInitializer {
                     val directory = FabricLoader.getInstance().gameDir
                     val identity = IntegrityStores.pack(directory, createIfMissing = true)
                     require(identity.minecraftVersion == minecraft) { "integrity-modpack.json differs from the running Minecraft version" }
-                    IntegrityService.scan(directory, identity, ServerConfig(maxElements = challenge.maxElements, maxScanBytes = challenge.maxScanBytes), challenge.scannedCategories, cache) { done, total ->
+                    val inventory = IntegrityService.scan(directory, identity, ServerConfig(maxElements = challenge.maxElements, maxScanBytes = challenge.maxScanBytes), challenge.scannedCategories, cache) { done, total ->
                         if (done == total) notify(client, "Installation vérifiée, envoi de la réponse.")
                         else if (done % PROGRESS_STEP == 0) notify(client, "Vérification de l'installation : $done/$total")
                     }
+                    inventory.copy(runtime = RuntimeInspector.inspect(directory, selectedPacks, packDirectory, challenge.nonce))
                 } catch (error: InterruptedException) {
                     return@FutureTask Unit
                 } catch (error: Exception) {
@@ -109,6 +118,22 @@ class IntegrityClient : ClientModInitializer {
     private fun cancel(owner: Any) {
         val current = active.get()
         if (current?.owner === owner && active.compareAndSet(current, null)) current.future.cancel(true)
+    }
+
+    /** Les resourcepacks sélectionnés, lus sur le fil du client ; les sources du jeu n'ont pas de nom, ses constantes se reconnaissent une à une. */
+    private fun selectedPacks(client: Minecraft): List<SelectedPack> {
+        fun read(): List<SelectedPack> = client.resourcePackRepository.selectedPacks.map { pack ->
+            val source = when (pack.packSource) {
+                PackSource.DEFAULT -> "DEFAULT"
+                PackSource.BUILT_IN -> "BUILT_IN"
+                PackSource.FEATURE -> "FEATURE"
+                PackSource.WORLD -> "WORLD"
+                PackSource.SERVER -> "SERVER"
+                else -> "OTHER"
+            }
+            SelectedPack(pack.id, source)
+        }
+        return if (client.isSameThread) read() else client.submit(Supplier { read() }).get(10, TimeUnit.SECONDS)
     }
 
     /** Affiche ou met à jour le toast Integrity, depuis n'importe quel fil. */

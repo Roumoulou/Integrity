@@ -1,5 +1,7 @@
 [versions]
 minecraft = "26.1.2"
+# Le SHA-1 du client.jar de Mojang pour cette version (downloads.client.sha1 de son JSON de version) : le serveur l'attend du client.
+client-jar-sha1 = "4e618f09a0c649dde3fdf829df443ce0b8831e65"
 fabric-api = "0.155.3+26.1.2"
 fabric-gametest-api = "4.0.18+867b87624c"
 

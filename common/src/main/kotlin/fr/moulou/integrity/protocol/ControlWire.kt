@@ -10,7 +10,8 @@ import java.io.DataOutputStream
 import java.util.UUID
 
 object ControlWire {
-    const val VERSION = 1
+    /** Le protocole `2` porte le relevé d'exécution ; ses canaux changent de nom avec lui (`IntegrityPayloads`). */
+    const val VERSION = 2
     const val CHUNK_BYTES = 24 * 1024
     const val MAX_REPORT_BYTES = 4 * 1024 * 1024
     const val MAX_ENVELOPE_BYTES = MAX_REPORT_BYTES + 512

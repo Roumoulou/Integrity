@@ -18,8 +18,13 @@ object ConfigValidation : Validator<ServerConfig> {
         if (data.activeReference.isNotEmpty() && !referenceId.matches(data.activeReference)) add("activeReference" to "invalid reference identifier")
         if (data.timeoutSeconds !in 5..600) add("timeoutSeconds" to "must be between 5 and 600")
         if (data.recheckIntervalSeconds !in 0..86_400 || data.recheckIntervalSeconds in 1..29) add("recheckIntervalSeconds" to "must be zero or between 30 and 86400")
+        if (data.recheckJitterSeconds !in 0..3600) add("recheckJitterSeconds" to "must be between 0 and 3600")
         if (data.maxElements !in 1..10_000) add("maxElements" to "must be between 1 and 10000")
         if (data.maxScanBytes !in 1..1_099_511_627_776) add("maxScanBytes" to "must be between 1 byte and 1 TiB")
+        if (data.rejectedLaunchOptions.size > 64) add("rejectedLaunchOptions" to "at most 64 prefixes are supported")
+        data.rejectedLaunchOptions.forEachIndexed { index, prefix ->
+            if (prefix.isBlank() || prefix.length > 128 || prefix.any { it.isWhitespace() || it.isISOControl() }) add("rejectedLaunchOptions[$index]" to "must be a nonblank prefix of at most 128 characters without spaces")
+        }
         if (data.policies.keys != Category.entries.toSet()) add("policies" to "all three categories are required")
         if (data.rules.size > 1000) add("rules" to "at most 1000 rules are supported")
         data.rules.forEachIndexed { index, rule ->

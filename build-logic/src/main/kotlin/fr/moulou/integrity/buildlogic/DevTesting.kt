@@ -61,6 +61,7 @@ fun Project.configureDevTesting(minecraftVersion: String, publication: Directory
             outputs.doNotCacheIf("Loom development instances contain live deliberate changes") { true }
             systemProperty("integrity.expectedMinecraft", minecraftVersion)
             systemProperty("integrity.distributionJar", releaseJar.get().asFile.absolutePath)
+            systemProperty("integrity.distributionMapping", layout.buildDirectory.file("proguard/mapping.txt").get().asFile.absolutePath)
             systemProperty("integrity.mdtk.development", "true")
             systemProperty("integrity.mdtk.client", layout.projectDirectory.dir("run/client-modded").asFile.absolutePath)
             systemProperty("integrity.mdtk.reference", layout.projectDirectory.dir("run/server-modded/integrity/reference-client/MDTK-DEV-$minecraftVersion/.minecraft").asFile.absolutePath)

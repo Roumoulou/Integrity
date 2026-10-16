@@ -11,16 +11,18 @@ import fr.moulou.integrity.model.ValidationResult
 import fr.moulou.integrity.model.Violation
 import java.util.UUID
 
-class RulesEngine(private val config: ServerConfig) {
+/** Compare un inventaire reçu à la référence selon la configuration, et le relevé d'exécution du client à ce que le serveur attend (`expectations`). */
+class RulesEngine(private val config: ServerConfig, private val expectations: ServerExpectations = ServerExpectations.current) {
     private val selectors = config.rules.map { rule -> Selector(rule, rule.path?.let(::glob)) }
 
-    fun compare(reference: InventoryReport, client: InventoryReport, player: UUID): ValidationResult {
+    /** Le verdict ; `nonce` est celui du contrôle en cours, qui lie l'authentification du JAR client à ce contrôle, ou `null` hors d'un contrôle. */
+    fun compare(reference: InventoryReport, client: InventoryReport, player: UUID, nonce: ByteArray? = null): ValidationResult {
         val problems = ConfigValidation.problems(config).map { "Configuration invalide : ${it.first}." } + ReportValidation.problems(reference, config.maxElements) + ReportValidation.problems(client, config.maxElements)
         if (problems.isNotEmpty()) return ValidationResult(problems = problems.distinct())
         val versionProblems = buildList {
             if (config.requireSameMinecraft && reference.pack.minecraftVersion != client.pack.minecraftVersion) add("Minecraft ${reference.pack.minecraftVersion} est requis ; le client déclare ${client.pack.minecraftVersion}.")
             if (config.requireSameModpack && (reference.pack.id != client.pack.id || reference.pack.version != client.pack.version)) add("Le modpack ${reference.pack.id} ${reference.pack.version} est requis.")
-        }
+        } + RuntimeRules.problems(reference, client, config, expectations, nonce)
         val expected = reference.entries.toMutableList()
         val unmatched = client.entries.toMutableList()
         val violations = ArrayList<Violation>()

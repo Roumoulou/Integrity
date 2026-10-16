@@ -65,6 +65,7 @@ fun Project.configureMdtkTesting(minecraftVersion: String, publication: Director
         outputs.doNotCacheIf("MDTK instances contain live deliberate changes") { true }
         systemProperty("integrity.expectedMinecraft", minecraftVersion)
         systemProperty("integrity.distributionJar", releaseJar.get().asFile.absolutePath)
+        systemProperty("integrity.distributionMapping", layout.buildDirectory.file("proguard/mapping.txt").get().asFile.absolutePath)
         systemProperty("integrity.mdtk.client", client.dir("minecraft").asFile.absolutePath)
         systemProperty("integrity.mdtk.reference", approved.asFile.absolutePath)
         systemProperty("integrity.mdtk.fixtures", layout.settingsDirectory.dir("../../02-data/00-test/$minecraftVersion").asFile.absolutePath)

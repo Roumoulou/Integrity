@@ -4,9 +4,9 @@ Mod Fabric client et serveur. Avant d'admettre un joueur, le serveur compare l'i
 `shaderpacks`) à une référence approuvée par l'administrateur, puis refait ce contrôle à chaque connexion, périodiquement pendant la partie et sur
 commande. L'installation du serveur et le modpack client peuvent contenir des mods différents : la référence décrit le client approuvé, jamais le serveur.
 
-Version `1.0.0`, un JAR par Minecraft : `26.1.2`, `26.2` et `26.3`. Le build et ses tests passent sur les trois versions, et les clients de développement
-sont acceptés puis refusés en jeu sur chacune. Integrity vise un serveur entre amis et la triche opportuniste : un client modifié peut mentir sur son
-inventaire, le chiffrement et l'obfuscation ne font que compliquer ce contournement.
+Version `1.1.0`, un JAR par Minecraft : `26.1.2`, `26.2` et `26.3`. Le build et ses tests passent sur les trois versions, et les clients de développement
+sont acceptés puis refusés en jeu sur chacune. Integrity vise un serveur entre amis et la triche opportuniste : le client calcule et déclare son état, un
+client modifié peut mentir, et chaque mesure du mod ne fait que monter le coût du contournement.
 
 ## Ce qui est contrôlé
 
@@ -16,6 +16,13 @@ réserve des règles de chemin. Un mod imbriqué est couvert par l'empreinte du 
 
 L'identifiant et la version du modpack doivent correspondre à la référence, et la version de Minecraft à celle du serveur. Un contrôle absent, incomplet,
 altéré ou tardif refuse l'accès ; un écart détecté pendant la partie déconnecte le joueur.
+
+Le client déclare aussi comment il tourne : les mods que Fabric Loader a chargés et d'où, les resourcepacks sélectionnés et leur dossier, les arguments de
+la JVM et les propriétés `fabric.*`, le jar du jeu et son empreinte, ses versions, les mixins et les classes des autres mods qui visent Integrity, et une
+empreinte de son propre JAR liée au contrôle. Le serveur refuse un mod chargé hors de `mods` ou par `fabric.addMods`, un JAR de `mods` qui n'est pas
+chargé, un resourcepack sélectionné hors de `resourcepacks` ou un dossier de packs déplacé, un agent Java ou un débogueur, un jar du jeu qui n'est pas
+celui que Mojang publie, un mod voisin qui vise Integrity, un JAR Integrity qui n'est pas celui du serveur, et toute autre version d'Integrity que la
+sienne. Un client `1.0.x` est refusé avec la version à installer.
 
 Les datapacks ne sont pas contrôlés : en multijoueur, ils viennent du monde du serveur, pas de l'installation du joueur. Les réglages des autres mods ne sont
 pas contrôlés non plus. Le serveur intégré du solo et du LAN n'impose aucun contrôle, sauf avec `enforceSingleplayer: true` et une référence préparée.
@@ -73,10 +80,13 @@ nouvel identifiant, et son activation explicite : un manifeste n'est jamais écr
 | `requireSameMinecraft` | `true` | même Minecraft pour le serveur, la référence et le client |
 | `requireSameModpack` | `true` | mêmes `id` et `version` du modpack |
 | `enforceSingleplayer` | `false` | appliquer aussi les contrôles au serveur intégré du solo et du LAN |
+| `allowDevelopmentClients` | `false` | tolérer les clients de développement : `fabric.development`, les propriétés de Loom, des mods chargés hors de `mods`, un jar du jeu ou un JAR Integrity qui ne sont pas ceux attendus |
 | `timeoutSeconds` | `120` | délai complet d'un contrôle, de 5 à 600 |
 | `recheckIntervalSeconds` | `300` | contrôle périodique en partie ; `0` le désactive, sinon de 30 à 86400 |
+| `recheckJitterSeconds` | `60` | écart tiré au sort autour de l'intervalle, de 0 à 3600, au plus la moitié de l'intervalle |
 | `maxElements` | `10000` | nombre maximal d'éléments dans les trois catégories |
 | `maxScanBytes` | `68719476736` | octets lus au plus par contrôle, 64 Gio |
+| `rejectedLaunchOptions` | agents, débogueur, `-Xbootclasspath` | préfixes des arguments JVM refusés ; `fabric.addMods`, `fabric.modsFolder` et `fabric.debug.*` le sont toujours |
 | `policies` | strictes | une politique par catégorie : `ignore`, `allowAdded`, `allowMissing`, `allowModified` |
 | `rules` | `[]` | exceptions et interdictions ciblées |
 
@@ -110,6 +120,7 @@ Ces commandes demandent la permission administrateur des commandes Minecraft. Da
 | `integrity reference diff <avant> <après>` | ajouts, retraits, modifications et renommages entre deux manifestes |
 | `integrity reload` | rechargement validé des règles et de la référence |
 | `integrity check` | nouveau contrôle des joueurs connectés |
+| `integrity history <joueur>` | les derniers contrôles d'un joueur connecté, ou d'un UUID : verdicts, versions vues et canaux annoncés |
 
 Côté client, `/integrityclient export <id>` écrit le manifeste de l'installation locale (voir Préparer la référence). Pendant un contrôle, un toast
 affiche l'avancement de la vérification.
@@ -117,9 +128,11 @@ affiche l'avancement de la vérification.
 ## Limites
 
 Le rapport du client est chiffré (X25519 éphémère, HKDF-SHA256, AES-256-GCM) et lié au contrôle et à la connexion : un rapport rejoué, altéré ou destiné à
-un autre contrôle est refusé. En mode en ligne, la connexion Minecraft est déjà chiffrée ; cette couche sert surtout à l'anti-rejeu et oblige un
-tricheur à comprendre le protocole. Le vrai rempart contre un client modifié est l'obfuscation du JAR, et il n'est pas infranchissable : Integrity ne
-fournit pas une attestation indépendante de l'installation. Un fichier modifié puis restauré entre deux contrôles échappe à la détection.
+un autre contrôle est refusé. En mode en ligne, la connexion Minecraft est déjà chiffrée ; cette couche sert surtout à l'anti-rejeu. Tout le reste est
+déclaré par le client : un client modifié peut mentir sur son inventaire comme sur son relevé d'exécution, et chaque mesure (l'attestation de ce qui est
+chargé, le refus des mods voisins qui visent Integrity, l'authentification du JAR, l'obfuscation) se contourne en la patchant aussi, à un coût de plus.
+Les sources sont publiques et le build reproductible : l'obfuscation ne ralentit que celui qui n'a que le JAR. Integrity ne fournit pas une attestation
+indépendante de l'installation, et un fichier modifié puis restauré entre deux contrôles échappe à la détection.
 
 ## Construire
 
@@ -132,9 +145,9 @@ Storify et Outfitter viennent du dépôt Repsy déclaré par le build.
 
 | Module | Minecraft | JAR distribué |
 |---|---|---|
-| `mc-26.1` | `26.1.2` | `mc-26.1\build\libs\integrity-1.0.0+26.1.2.jar` |
-| `mc-26.2` | `26.2` | `mc-26.2\build\libs\integrity-1.0.0+26.2.jar` |
-| `mc-26.3` | `26.3` | `mc-26.3\build\libs\integrity-1.0.0+26.3.jar` |
+| `mc-26.1` | `26.1.2` | `mc-26.1\build\libs\integrity-1.1.0+26.1.2.jar` |
+| `mc-26.2` | `26.2` | `mc-26.2\build\libs\integrity-1.1.0+26.2.jar` |
+| `mc-26.3` | `26.3` | `mc-26.3\build\libs\integrity-1.1.0+26.3.jar` |
 
 `common` porte la logique partagée et compile contre `26.3` ; chaque module de version vérifie que ce code ne nomme que des symboles de son jeu, embarque
 Storify, tomlkt et json5, et produit deux JAR du même code : `integrity-<version>+<minecraft>-dev.jar`, tel que compilé, et
@@ -146,7 +159,9 @@ GameTests par version. Les environnements de développement, les essais avec le 
 
 Le JAR distribué est obfusqué parce que le code client est le contrôle d'accès lui-même : un joueur qui peut retoucher ce JAR à la volée envoie un
 rapport forgé. ProGuard, réglé par `gradle/proguard.pro`, ne fait que renommer les classes et membres internes : aucune réduction, aucune optimisation,
-aucun chiffrement de chaînes, aucune réécriture du flot. Les points d'entrée, les modèles sérialisés, les codecs et la façade gardent leur nom.
+aucun chiffrement de chaînes, aucune réécriture du flot. Les points d'entrée, le pont de version et les classes de données (`model`, `config`) gardent leur
+nom ; tout le reste est renommé, et les tests du JAR obfusqué retrouvent le code par le fichier de correspondances. Les sources étant publiques et le build
+reproductible, ce renommage ne ralentit que celui qui n'a que le JAR.
 
 Le JAR distribué est reproductible : construire le tag d'une version, dans n'importe quel environnement, donne le même fichier octet pour octet.
 Pour le vérifier :
@@ -172,4 +187,4 @@ blanc sans `-Ppublish_live=true` ; la marche à suivre est dans
 
 Licence `LGPL-3.0-only`, textes dans `LICENSE` et `LICENSE.GPL`.
 
-*Dernière vérification : 2026-10-14.*
+*Dernière vérification : 2026-10-16.*

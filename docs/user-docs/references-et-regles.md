@@ -148,6 +148,37 @@ version et n'ajoute aucune passerelle entre jeux.
 Le serveur intégré n'applique pas les contrôles par défaut. Pour contrôler aussi le solo ou le LAN, régler `enforceSingleplayer` sur `true` et préparer une
 référence active dans le dossier de jeu du serveur intégré avant la connexion.
 
+## 7. Le relevé d'exécution
+
+Le rapport du client porte, à côté de l'inventaire, ce que Fabric Loader a chargé et comment le jeu a été lancé. Le serveur en tire ses refus :
+
+| Ce que le client déclare | Ce que le serveur refuse |
+|---|---|
+| les mods chargés, leur origine et leur chemin | un mod chargé hors de `mods`, un JAR de `mods` qui n'est pas chargé ou dont l'identifiant ou la version diffèrent, une liste de mods qui a changé depuis le lancement |
+| les propriétés `fabric.*` et les arguments de la JVM | `fabric.addMods`, `fabric.modsFolder`, `fabric.skipMcProvider`, `fabric.systemLibraries`, `fabric.debug.*`, toute propriété `fabric.*` inconnue, et les arguments qui commencent par un préfixe de `rejectedLaunchOptions` |
+| les resourcepacks sélectionnés et leur dossier | un pack sélectionné depuis un fichier absent de `resourcepacks`, un dossier de packs déplacé (`--resourcePackDir`) |
+| le jar du jeu et son SHA-1 | un jar qui n'est pas le `client.jar` que Mojang publie pour ce Minecraft |
+| les versions d'Integrity, du protocole, de Loader et du jeu | toute version d'Integrity autre que celle du serveur, un Minecraft autre que celui de la référence |
+| les mixins et les classes des autres mods qui visent `fr.moulou.integrity` | tout mod voisin dont un mixin vise Integrity ou dont une classe nomme son package |
+| une empreinte de son JAR Integrity, liée au nonce du contrôle | un JAR qui n'est pas celui du serveur, ou un client qui ne l'authentifie pas |
+
+`allowDevelopmentClients: true` tolère ce qu'un run Loom fait : `fabric.development` et les propriétés que Loom pose, des mods chargés hors de `mods`, des
+jars du jeu qui ne sont pas ceux de Mojang, l'absence de JAR à authentifier. Il ne tolère jamais `fabric.addMods`, un agent, un mixin ou une référence
+visant Integrity. Un serveur de production le laisse à `false`.
+
+`rejectedLaunchOptions` vaut par défaut `-javaagent:`, `-agentlib:`, `-agentpath:`, `-Xbootclasspath`, `-Xrunjdwp` et `-Xdebug`. Un serveur hors ligne
+dont le launcher injecte un agent (authlib-injector) retire `-javaagent:` de la liste.
+
+Un mod `environment: server` livré dans `mods` du client n'est pas chargé par Loader : le serveur le refuse comme présent mais non chargé, et le modpack
+doit cesser de le livrer au client.
+
+Les contrôles périodiques tirent leur échéance au sort dans `recheckJitterSeconds` autour de `recheckIntervalSeconds`, et un contrôle suit chaque
+réapparition et chaque changement de dimension tant que les contrôles périodiques sont actifs.
+
+`integrity history <joueur>` lit les derniers contrôles d'un joueur, par son nom s'il est connecté, sinon par son UUID : verdict, résumé, versions vues et
+canaux annoncés. L'historique vit sous `config\integrity\history\<uuid>.json`, borné aux `50` derniers contrôles et écrit atomiquement. Les canaux sont
+notés, jamais refusés.
+
 ---
 
-*Dernière vérification : 2026-10-14.*
+*Dernière vérification : 2026-10-16.*

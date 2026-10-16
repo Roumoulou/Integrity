@@ -46,9 +46,11 @@ abstract class PrepareDevReference : DefaultTask() {
             config.parentFile.mkdirs()
             val relative = root.toPath().relativize(approved.parentFile.toPath()).toString().replace('\\', '/')
             val policy = mapOf("ignore" to false, "allowAdded" to false, "allowMissing" to false, "allowModified" to false)
+            // Un couple Loom charge Integrity, Fabric API et FLK depuis le classpath : ses clients sont des clients de développement.
             config.writeText(json(mapOf(
                 "referenceInstance" to relative, "activeReference" to "", "requireSameMinecraft" to true, "requireSameModpack" to true,
-                "enforceSingleplayer" to false, "timeoutSeconds" to 120, "recheckIntervalSeconds" to 300, "maxElements" to 10_000, "maxScanBytes" to 68_719_476_736L,
+                "enforceSingleplayer" to false, "allowDevelopmentClients" to true, "timeoutSeconds" to 120, "recheckIntervalSeconds" to 300, "recheckJitterSeconds" to 60,
+                "maxElements" to 10_000, "maxScanBytes" to 68_719_476_736L, "rejectedLaunchOptions" to ServerDefaults.REJECTED_LAUNCH_OPTIONS,
                 "policies" to mapOf("mods" to policy, "resourcepacks" to policy, "shaderpacks" to policy), "rules" to emptyList<String>(),
             )), Charsets.UTF_8)
         }

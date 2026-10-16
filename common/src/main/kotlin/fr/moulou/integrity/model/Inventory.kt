@@ -1,5 +1,7 @@
 package fr.moulou.integrity.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -27,8 +29,16 @@ data class InventoryEntry(
     val modVersion: String? = null,
 )
 
+/** L'inventaire d'un dossier de jeu ; `runtime` n'existe que dans le rapport d'un client, jamais dans un manifeste, et ne s'écrit pas quand il manque. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
-data class InventoryReport(val pack: PackIdentity, val entries: List<InventoryEntry> = emptyList(), val error: String? = null, val schemaVersion: Int = 1)
+data class InventoryReport(
+    val pack: PackIdentity,
+    val entries: List<InventoryEntry> = emptyList(),
+    val error: String? = null,
+    val schemaVersion: Int = 1,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val runtime: RuntimeReport? = null,
+)
 
 @Serializable
 data class ReferenceManifest(val id: String, val generatedAt: String, val report: InventoryReport, val schemaVersion: Int = 1)
