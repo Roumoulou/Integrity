@@ -136,7 +136,7 @@ indépendante de l'installation, et un fichier modifié puis restauré entre deu
 
 ## Construire
 
-Java `25`, Kotlin `2.4.21`, Gradle `9.8.1` (wrapper fourni), Fabric Loom `1.18.2`, Fabric Loader `0.19.5`, Fabric Language Kotlin `1.14.2+kotlin.2.4.21`.
+Java `25`, Kotlin `2.4.21`, Gradle `9.8.1` (wrapper fourni), Fabric Loom `1.18.4`, Fabric Loader `0.19.5`, Fabric Language Kotlin `1.14.2+kotlin.2.4.21`.
 Storify et Outfitter viennent du dépôt Repsy déclaré par le build.
 
 ```powershell
@@ -167,7 +167,7 @@ Le JAR distribué est reproductible : construire le tag d'une version, dans n'im
 Pour le vérifier :
 
 ```bash
-git clone https://github.com/Roumoulou/Integrity.git && cd Integrity && git switch --detach v1.0.1
+git clone https://github.com/Roumoulou/Integrity.git && cd Integrity && git switch --detach v1.1.0-beta.1
 ./gradlew assemble --console=plain
 sha256sum mc-*/build/libs/integrity-*.jar
 ```
@@ -187,4 +187,4 @@ blanc sans `-Ppublish_live=true` ; la marche à suivre est dans
 
 Licence `LGPL-3.0-only`, textes dans `LICENSE` et `LICENSE.GPL`.
 
-*Dernière vérification : 2026-10-16.*
+*Dernière vérification : 2026-10-18.*

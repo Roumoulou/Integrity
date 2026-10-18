@@ -1,7 +1,7 @@
 [versions]
 fabric-loader = "0.19.5"
 fabric-language-kotlin = "1.14.2+kotlin.2.4.21"
-fabric-loom = "1.18.2"
+fabric-loom = "1.18.4"
 
 [libraries]
 fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
